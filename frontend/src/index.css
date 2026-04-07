@@ -107,10 +107,28 @@ button:disabled {
 
 .answer-box {
   margin-top: 12px;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #f8fafc;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fafc 0%, #fdfefe 100%);
+}
+
+.answer-panel {
+  border: 1px solid #9bd5cf;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #ecfdf5 0%, #f7fffc 100%);
+  padding: 12px;
+}
+
+.answer-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #0f766e;
+}
+
+.answer-panel p {
+  margin: 0;
+  color: #1f2937;
 }
 
 .citations {
@@ -122,16 +140,40 @@ button:disabled {
 .citations h3 {
   margin: 0 0 8px;
   font-size: 1rem;
+  color: #0f172a;
 }
 
-.citations ul {
+.reference-list {
+  list-style: none;
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
 }
 
-.citations p {
-  margin: 4px 0 10px;
+.reference-card {
+  border: 1px solid #dbe7f4;
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.reference-label {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1e3a8a;
+  background: #e0e7ff;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.reference-text {
+  margin: 0;
   color: #334155;
+  font-style: italic;
 }
 
 .doc-list {

@@ -80,6 +80,8 @@ function App() {
 
     try {
       setAsking(true);
+      setAnswer('');
+      setCitations([]);
       const response = await api.ask(question.trim());
       setAnswer(response.answer);
       setCitations(response.citations);
@@ -144,20 +146,23 @@ function App() {
         </form>
         <div className="answer-box">
           {askError ? <p className="error">{askError}</p> : null}
-          {!askError && answer ? <p>{answer}</p> : null}
+          {!askError && answer ? (
+            <article className="answer-panel">
+              <h3>Answer</h3>
+              <p>{answer}</p>
+            </article>
+          ) : null}
           {!askError && !answer ? (
             <p className="muted">No answer yet. Ask a question to test the API path.</p>
           ) : null}
           {!askError && citations.length > 0 ? (
             <div className="citations">
-              <h3>Citations</h3>
-              <ul>
+              <h3>References</h3>
+              <ul className="reference-list">
                 {citations.map((citation, index) => (
-                  <li key={`${citation.documentName}-${citation.chunkIndex}-${index}`}>
-                    <strong>
-                      {citation.documentName} (chunk {citation.chunkIndex})
-                    </strong>
-                    <p>{citation.excerpt}</p>
+                  <li className="reference-card" key={`${citation.documentName}-${index}`}>
+                    <span className="reference-label">{citation.documentName}</span>
+                    <p className="reference-text">{citation.excerpt}</p>
                   </li>
                 ))}
               </ul>
