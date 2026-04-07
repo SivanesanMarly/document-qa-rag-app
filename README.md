@@ -1,33 +1,88 @@
 # Document Q&A with Citations
 
-Initial scaffold for the take-home assignment: a React + TypeScript frontend and a Fastify + TypeScript backend with SQLite.
+Local fullstack app for document question answering with references.
 
-## Project structure
+- Frontend: React + TypeScript (Vite)
+- Backend: Fastify + TypeScript
+- Storage: SQLite
+- AI: OpenAI embeddings + chat completion
 
-- `frontend`: Vite + React + TypeScript client
-- `backend`: Fastify API + SQLite-ready foundation
+## Repository structure
 
-## Quick start
+- `frontend/` UI to upload documents, ask questions, and view references
+- `backend/` API for ingestion, embedding, retrieval, and answer generation
 
-1. Copy environment files:
-   - `backend/.env`
-   - `frontend/.env`
-2. Install dependencies:
-   - `cd backend && npm install`
-   - `cd ../frontend && npm install`
-3. Run backend:
-   - `cd backend && npm run dev`
-4. Run frontend:
-   - `cd frontend && npm run dev`
+## Prerequisites
 
-## Current status
+- Node.js 22+ (tested with Node 24)
+- npm 10+
+- OpenAI API key
 
-This commit sets up the initial structure and health-check flow.
-RAG ingestion (`chunk -> embed -> store`) and Q&A (`retrieve -> answer + citations`) are intentionally scaffolded and will be implemented incrementally.
+## 1) Clone and install
 
-## Environment
+```bash
+git clone <your-repo-url>
+cd doc-rag
 
-See:
-- `/.env`
-- `backend/.env`
-- `frontend/.env`
+cd backend && npm install
+cd ../frontend && npm install
+```
+
+## 2) Create environment files
+
+Create `backend/.env`:
+
+```env
+PORT=4000
+HOST=127.0.0.1
+DB_PATH=./data/app.db
+CORS_ORIGIN=http://localhost:5173
+OPENAI_API_KEY=your_openai_key_here
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_CHAT_MODEL=gpt-4.1-mini
+```
+
+Create `frontend/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:4000
+```
+
+## 3) Run locally
+
+Terminal 1:
+
+```bash
+cd backend
+npm run dev
+```
+
+Terminal 2:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+## 4) Use the app
+
+1. Add a document name and content, then save.
+2. Ask a natural language question.
+3. View:
+   - Answer
+   - References (document name + relevant excerpt)
+
+## API summary
+
+- `GET /health`
+- `GET /documents`
+- `POST /documents`
+- `POST /ask`
+
+## Notes
+
+- App is intended for local evaluation use.
+- Do not commit secrets (`.env` files are ignored by git).
+- SQLite DB files in `backend/data` are runtime artifacts and ignored by git.

@@ -12,11 +12,26 @@ Fastify + TypeScript API service for document ingestion and question answering w
 
 ## Environment
 
-Use `.env` in this folder and update values as needed.
+Use `.env` in this folder:
 
-## Current API
+```env
+PORT=4000
+HOST=127.0.0.1
+DB_PATH=./data/app.db
+CORS_ORIGIN=http://localhost:5173
+OPENAI_API_KEY=your_openai_key_here
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_CHAT_MODEL=gpt-4.1-mini
+```
+
+## API
 
 - `GET /health`
-- `GET /documents` (placeholder)
-- `POST /documents` (placeholder)
-- `POST /ask` (placeholder)
+- `GET /documents`
+- `POST /documents`
+- `POST /ask`
+
+## Flow
+
+- `POST /documents`: stores document, chunks content, generates embeddings, stores chunks + vectors.
+- `POST /ask`: embeds question, retrieves top chunks by cosine similarity, asks model with retrieved context, returns answer + references.
