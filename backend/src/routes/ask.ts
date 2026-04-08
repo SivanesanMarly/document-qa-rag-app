@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { ragService } from '../services/rag.service.js';
 
 const askSchema = z.object({
-  question: z.string().min(2)
+  question: z.string().min(2),
+  documentIds: z.array(z.string().min(1)).optional()
 });
 
 export const askRoutes: FastifyPluginAsync = async (app) => {
@@ -18,7 +19,9 @@ export const askRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const result = await ragService.ask(parseResult.data.question);
+    const result = await ragService.ask(parseResult.data.question, {
+      documentIds: parseResult.data.documentIds ?? []
+    });
     return reply.send(result);
   });
 };

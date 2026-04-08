@@ -25,6 +25,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
     chunk_index INTEGER NOT NULL,
+    page_number INTEGER,
     text TEXT NOT NULL,
     token_count INTEGER NOT NULL,
     created_at TEXT NOT NULL,
@@ -40,3 +41,9 @@ db.exec(`
     FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
   );
 `);
+
+const chunkColumns = db.prepare(`PRAGMA table_info(chunks)`).all() as Array<{ name: string }>;
+const hasPageNumberColumn = chunkColumns.some((column) => column.name === 'page_number');
+if (!hasPageNumberColumn) {
+  db.exec(`ALTER TABLE chunks ADD COLUMN page_number INTEGER`);
+}

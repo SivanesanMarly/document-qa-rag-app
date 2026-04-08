@@ -1,3 +1,13 @@
+export type TextPage = {
+  pageNumber: number;
+  text: string;
+};
+
+export type ChunkWithPage = {
+  text: string;
+  pageNumber: number | null;
+};
+
 export function chunkText(input: string, maxChars = 800, overlap = 120): string[] {
   const text = input.replace(/\r\n/g, '\n').trim();
 
@@ -20,6 +30,20 @@ export function chunkText(input: string, maxChars = 800, overlap = 120): string[
   }
 
   return chunks;
+}
+
+export function chunkPages(inputPages: TextPage[], maxChars = 800, overlap = 120): ChunkWithPage[] {
+  const result: ChunkWithPage[] = [];
+  for (const page of inputPages) {
+    const pageChunks = chunkText(page.text, maxChars, overlap);
+    for (const chunk of pageChunks) {
+      result.push({
+        text: chunk,
+        pageNumber: page.pageNumber
+      });
+    }
+  }
+  return result;
 }
 
 export function roughTokenCount(text: string): number {

@@ -63,7 +63,7 @@ export async function completeWithContext(question: string, context: string): Pr
         {
           role: 'system',
           content:
-            'You are a document QA assistant. Use only the provided context. If the answer is not present, say so clearly. Return JSON only in this schema: {"answer":"string","citationChunkIndices":[number]}. citationChunkIndices are 1-based chunk ids from the provided context labels.'
+            'You are a document QA assistant. Use only the provided context. If the answer is not present, say so clearly. Return JSON only in this schema: {"answerHtml":"string","citationChunkIndices":[number]}. answerHtml must be semantic HTML only (use h3, p, ul, ol, li, table, strong, em when helpful). Do not use markdown. citationChunkIndices are 1-based chunk ids from the provided context labels.'
         },
         {
           role: 'user',

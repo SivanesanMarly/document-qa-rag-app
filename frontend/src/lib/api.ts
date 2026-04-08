@@ -33,9 +33,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
-  ask: (question: string) =>
+  ask: (question: string, documentIds: string[]) =>
     request<AskResponse>('/ask', {
       method: 'POST',
-      body: JSON.stringify({ question })
+      body: JSON.stringify({ question, documentIds })
     })
 };

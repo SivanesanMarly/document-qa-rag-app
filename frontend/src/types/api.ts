@@ -16,7 +16,10 @@ export type DocumentsResponse = {
 
 export type CreateDocumentRequest = {
   name: string;
-  content: string;
+  content?: string;
+  fileName?: string;
+  fileType?: string;
+  fileBase64?: string;
 };
 
 export type CreateDocumentResponse = {
@@ -28,11 +31,12 @@ export type CreateDocumentResponse = {
 
 export type Citation = {
   documentName: string;
-  chunkIndex: number;
-  excerpt: string;
+  pageNumber: number | null;
+  reference: string | null;
 };
 
 export type AskResponse = {
   answer: string;
+  sourceMessage: string;
   citations: Citation[];
 };
