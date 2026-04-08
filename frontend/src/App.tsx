@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { api } from './lib/api';
@@ -6,6 +6,25 @@ import type { Citation, DocumentSummary } from './types/api';
 
 type StatusKind = 'idle' | 'loading' | 'success' | 'error';
 type DocumentInputMode = 'paste' | 'upload';
+type ChatMessage =
+  | {
+      id: string;
+      role: 'user';
+      text: string;
+    }
+  | {
+      id: string;
+      role: 'assistant';
+      html: string;
+      sourceMessage: string;
+      referenceLabel: string;
+      referenceValue: string;
+    }
+  | {
+      id: string;
+      role: 'error';
+      text: string;
+    };
 
 const ALLOWED_TAGS = new Set([
   'h2',
@@ -113,12 +132,21 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
+function createMessageId(): string {
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function App() {
   const [backendStatus, setBackendStatus] = useState<StatusKind>('idle');
   const [statusMessage, setStatusMessage] = useState('Checking backend...');
 
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [documentMode, setDocumentMode] = useState<DocumentInputMode>('paste');
+  const [showComposerMenu, setShowComposerMenu] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [documentName, setDocumentName] = useState('');
   const [documentContent, setDocumentContent] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -127,18 +155,15 @@ function App() {
 
   const [question, setQuestion] = useState('');
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-  const [answer, setAnswer] = useState('');
-  const [sourceMessage, setSourceMessage] = useState('');
-  const [citations, setCitations] = useState<Citation[]>([]);
   const [askError, setAskError] = useState('');
   const [asking, setAsking] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const chatWindowRef = useRef<HTMLDivElement | null>(null);
 
   const sortedDocuments = useMemo(
     () => [...documents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [documents]
   );
-  const answerHtml = useMemo(() => formatAndSanitizeAnswer(answer), [answer]);
-
   useEffect(() => {
     setSelectedDocumentIds((previous) => {
       if (documents.length === 0) {
@@ -159,6 +184,17 @@ function App() {
   useEffect(() => {
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    const windowElement = chatWindowRef.current;
+    if (!windowElement) {
+      return;
+    }
+    windowElement.scrollTo({
+      top: windowElement.scrollHeight,
+      behavior: 'smooth'
+    });
+  }, [messages, asking]);
 
   async function bootstrap() {
     try {
@@ -226,6 +262,7 @@ function App() {
       setDocumentName('');
       setDocumentContent('');
       setDocumentFile(null);
+      setShowAddDialog(false);
       await refreshDocuments();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -249,18 +286,45 @@ function App() {
 
     try {
       setAsking(true);
-      setAnswer('');
-      setSourceMessage('');
-      setCitations([]);
-      const response = await api.ask(question.trim(), selectedDocumentIds);
-      setAnswer(response.answer);
-      setSourceMessage(response.sourceMessage);
-      setCitations(response.citations);
+      const askedQuestion = question.trim();
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: createMessageId(),
+          role: 'user',
+          text: askedQuestion
+        }
+      ]);
+      setQuestion('');
+
+      const response = await api.ask(askedQuestion, selectedDocumentIds);
+      const citation = response.citations[0] as Citation | undefined;
+      const referenceLabel = citation
+        ? `${citation.documentName}${citation.pageNumber ? ` · Page ${citation.pageNumber}` : ''}`
+        : 'Reference';
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: createMessageId(),
+          role: 'assistant',
+          html: formatAndSanitizeAnswer(response.answer),
+          sourceMessage: response.sourceMessage,
+          referenceLabel,
+          referenceValue: citation?.reference ?? 'Not explicitly found in selected text.'
+        }
+      ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       setAskError(message);
-      setSourceMessage('');
-      setCitations([]);
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: createMessageId(),
+          role: 'error',
+          text: message
+        }
+      ]);
     } finally {
       setAsking(false);
     }
@@ -270,67 +334,17 @@ function App() {
     <main className="page">
       <header className="header">
         <h1>Document Q&A with Citations</h1>
-        <p className={`status status-${backendStatus}`}>{statusMessage}</p>
       </header>
 
-      <section className="card">
-        <h2>Add Document</h2>
-        <form onSubmit={onSubmitDocument} className="form-grid">
-          <div className="mode-tabs" role="tablist" aria-label="Document input mode">
-            <button
-              type="button"
-              className={documentMode === 'paste' ? 'mode-tab active' : 'mode-tab'}
-              onClick={() => setDocumentMode('paste')}
-            >
-              Paste Text
-            </button>
-            <button
-              type="button"
-              className={documentMode === 'upload' ? 'mode-tab active' : 'mode-tab'}
-              onClick={() => setDocumentMode('upload')}
-            >
-              Upload File
-            </button>
+      <section className="workspace">
+        <aside className="sidebar">
+          <div className="sidebar-head">
+            <h2>Uploaded Documents</h2>
+            <p className="muted">
+              Select source files for chat. Use the <strong>+</strong> button in chat input to add new
+              text/files.
+            </p>
           </div>
-          <label>
-            Document name
-            <input
-              type="text"
-              value={documentName}
-              onChange={(event) => setDocumentName(event.target.value)}
-              placeholder="e.g. Product Requirements"
-            />
-          </label>
-          {documentMode === 'paste' ? (
-            <label>
-              Content
-              <textarea
-                rows={7}
-                value={documentContent}
-                onChange={(event) => setDocumentContent(event.target.value)}
-                placeholder="Paste text content here"
-              />
-            </label>
-          ) : (
-            <label>
-              File
-              <input
-                type="file"
-                accept=".txt,.pdf,text/plain,application/pdf"
-                onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-          )}
-          {documentError ? <p className="error">{documentError}</p> : null}
-          <button type="submit" disabled={savingDocument}>
-            {savingDocument ? 'Saving...' : 'Save Document'}
-          </button>
-        </form>
-      </section>
-
-      <section className="card">
-        <h2>Ask Question</h2>
-        <form onSubmit={onAsk} className="form-grid">
           <div className="source-picker">
             <div className="source-picker-header">
               <span>Sources</span>
@@ -344,8 +358,11 @@ function App() {
                 </button>
               ) : null}
             </div>
+            <p className="source-selected">
+              Selected: {selectedDocumentIds.length} / {documents.length}
+            </p>
             {documents.length === 0 ? (
-              <p className="muted">Upload at least one document to enable asking.</p>
+              <p className="muted">No documents yet. Add one from the chat + menu.</p>
             ) : (
               <ul className="source-list">
                 {sortedDocuments.map((doc) => {
@@ -377,67 +394,226 @@ function App() {
               </ul>
             )}
           </div>
-          <label>
-            Question
-            <input
-              type="text"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Ask about your uploaded documents"
-            />
-          </label>
-          <button type="submit" disabled={asking}>
-            {asking ? 'Asking...' : 'Ask'}
-          </button>
-        </form>
-        <div className="answer-box">
-          {askError ? <p className="error">{askError}</p> : null}
-          {!askError && answer ? (
-            <article className="answer-panel">
-              <h3>Answer</h3>
-              <div className="answer-rich" dangerouslySetInnerHTML={{ __html: answerHtml }} />
-              {sourceMessage ? <p className="source-message">{sourceMessage}</p> : null}
-            </article>
-          ) : null}
-          {!askError && !answer ? (
-            <p className="muted">No answer yet. Ask a question to test the API path.</p>
-          ) : null}
-          {!askError && citations.length > 0 ? (
-            <div className="citations">
-              <h3>References</h3>
-              <div className="reference-list">
-                <div className="reference-card">
-                  <span className="reference-label">
-                    {citations[0]?.documentName}
-                    {citations[0]?.pageNumber ? ` · Page ${citations[0].pageNumber}` : ''}
-                  </span>
-                  {citations[0]?.reference ? (
-                    <p className="reference-hint">Reference: {citations[0].reference}</p>
-                  ) : (
-                    <p className="reference-hint">Reference: Not explicitly found in selected text.</p>
-                  )}
-                </div>
+        </aside>
+
+        <div className="card chat-card">
+          <h2>Chat</h2>
+          <div className="answer-box">
+            <div className="chat-shell">
+              <div className="chat-window" ref={chatWindowRef}>
+                {messages.length === 0 ? (
+                  <div className="chat-empty">
+                    <h3>Start a conversation</h3>
+                    <p>Ask a question about your selected documents. Answers will include source context.</p>
+                  </div>
+                ) : (
+                  messages.map((message) => {
+                    if (message.role === 'user') {
+                      return (
+                        <article key={message.id} className="chat-row user">
+                          <span className="chat-avatar" aria-hidden="true">
+                            🙋
+                          </span>
+                          <div className="chat-bubble user">
+                            <p>{message.text}</p>
+                          </div>
+                        </article>
+                      );
+                    }
+
+                    if (message.role === 'error') {
+                      return (
+                        <article key={message.id} className="chat-row assistant">
+                          <div className="chat-bubble error">
+                            <p>{message.text}</p>
+                          </div>
+                        </article>
+                      );
+                    }
+
+                    return (
+                      <article key={message.id} className="chat-row assistant">
+                        <div className="chat-bubble assistant">
+                          <div className="chat-meta">
+                            <span className="chat-icon" aria-hidden="true">
+                              🤖
+                            </span>
+                            <span>Assistant</span>
+                          </div>
+                          <div
+                            className="answer-rich"
+                            dangerouslySetInnerHTML={{
+                              __html: message.html || '<p>No answer generated.</p>'
+                            }}
+                          />
+                          <div className="reference-card compact">
+                            <span className="reference-label">{message.referenceLabel}</span>
+                            <p className="reference-hint">Reference: {message.referenceValue}</p>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })
+                )}
+                {asking ? (
+                  <article className="chat-row assistant">
+                    <div className="chat-bubble assistant typing">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  </article>
+                ) : null}
+              </div>
+              <div className="composer-wrap">
+                {showComposerMenu ? (
+                  <div className="composer-menu">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocumentMode('paste');
+                        setShowAddDialog(true);
+                        setShowComposerMenu(false);
+                      }}
+                    >
+                      <span className="menu-icon" aria-hidden="true">
+                        📝
+                      </span>
+                      <span>Paste text</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocumentMode('upload');
+                        setShowAddDialog(true);
+                        setShowComposerMenu(false);
+                      }}
+                    >
+                      <span className="menu-icon" aria-hidden="true">
+                        📎
+                      </span>
+                      <span>Add files</span>
+                    </button>
+                  </div>
+                ) : null}
+                <form onSubmit={onAsk} className="chat-input-row">
+                  <button
+                    type="button"
+                    className="plus-btn"
+                    onClick={() => setShowComposerMenu((prev) => !prev)}
+                    aria-label="Open add options"
+                  >
+                    +
+                  </button>
+                  <input
+                    type="text"
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    placeholder="Ask about your uploaded documents"
+                  />
+                  <button type="submit" disabled={asking || selectedDocumentIds.length === 0}>
+                    {asking ? 'Thinking...' : 'Send'}
+                  </button>
+                </form>
               </div>
             </div>
-          ) : null}
+            {askError ? <p className="error">{askError}</p> : null}
+          </div>
         </div>
       </section>
 
-      <section className="card">
-        <h2>Documents ({sortedDocuments.length})</h2>
-        {sortedDocuments.length === 0 ? (
-          <p className="muted">No documents added yet.</p>
-        ) : (
-          <ul className="doc-list">
-            {sortedDocuments.map((doc) => (
-              <li key={doc.id}>
-                <strong>{doc.name}</strong>
-                <span>{new Date(doc.createdAt).toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {showAddDialog ? (
+        <div className="dialog-backdrop" onClick={() => setShowAddDialog(false)}>
+          <div className="dialog-card" onClick={(event) => event.stopPropagation()}>
+            <div className="dialog-head">
+              <h3>Add Document</h3>
+              <button
+                type="button"
+                className="dialog-close"
+                onClick={() => {
+                  setShowAddDialog(false);
+                  setDocumentError('');
+                }}
+                aria-label="Close add document dialog"
+              >
+                ×
+              </button>
+            </div>
+            <form className="quick-add-panel" onSubmit={onSubmitDocument}>
+              <div className="mode-tabs" role="tablist" aria-label="Document input mode">
+                <button
+                  type="button"
+                  className={documentMode === 'paste' ? 'mode-tab active' : 'mode-tab'}
+                  onClick={() => setDocumentMode('paste')}
+                >
+                  <span className="menu-icon" aria-hidden="true">
+                    📝
+                  </span>
+                  Paste Text
+                </button>
+                <button
+                  type="button"
+                  className={documentMode === 'upload' ? 'mode-tab active' : 'mode-tab'}
+                  onClick={() => setDocumentMode('upload')}
+                >
+                  <span className="menu-icon" aria-hidden="true">
+                    📎
+                  </span>
+                  Upload File
+                </button>
+              </div>
+              <input
+                type="text"
+                value={documentName}
+                onChange={(event) => setDocumentName(event.target.value)}
+                placeholder="Document name"
+              />
+              {documentMode === 'paste' ? (
+                <textarea
+                  rows={6}
+                  value={documentContent}
+                  onChange={(event) => setDocumentContent(event.target.value)}
+                  placeholder="Paste text content..."
+                />
+              ) : (
+                <label className="file-picker">
+                  <input
+                    type="file"
+                    accept=".txt,.pdf,text/plain,application/pdf"
+                    onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
+                  />
+                  <span className="file-picker-icon" aria-hidden="true">
+                    📎
+                  </span>
+                  <span className="file-picker-title">Choose a file to upload</span>
+                  <span className="file-picker-help">Supported: .txt, .pdf</span>
+                  {documentFile ? (
+                    <span className="file-chip">{documentFile.name}</span>
+                  ) : (
+                    <span className="file-chip muted-chip">No file selected</span>
+                  )}
+                </label>
+              )}
+              {documentError ? <p className="error">{documentError}</p> : null}
+              <div className="quick-add-actions">
+                <button type="submit" disabled={savingDocument}>
+                  {savingDocument ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-muted"
+                  onClick={() => {
+                    setShowAddDialog(false);
+                    setDocumentError('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
